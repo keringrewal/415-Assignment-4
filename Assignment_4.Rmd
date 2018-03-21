@@ -1,0 +1,164 @@
+---
+title: "Assignment 4"
+output: 
+  pdf_document: 
+    latex_engine: xelatex
+author: "Kerin Grewal"
+date: "2/28/18"
+---
+
+```{r, echo=FALSE}
+library(tidyverse)
+library(foreign)
+library(stringr)
+library(dplyr)
+library(reshape2)
+
+library(xtable)
+```
+
+```{r, echo= FALSE}
+
+tidyr::who
+
+who1 <- who %>% 
+  gather(new_sp_m014:newrel_f65, key = "key", value = "cases", na.rm = TRUE)
+who1
+
+who1 %>%count(key)
+
+who2 <- who1 %>% 
+  mutate(key = stringr::str_replace(key, "newrel", "new_rel"))
+who2
+
+who3 <- who2 %>% 
+  separate(key, c("new", "type", "sexage"), sep = "_")
+who3
+```
+#R for Data Science 12.6.1
+##Question 3: I claimed that iso2 and iso3 were redundant with country. Confirm this claim.
+```{r, echo=TRUE}
+u_country <- unique(who3[, c('country', 'iso2', 'iso3')])
+show(u_country)
+countries <- unique(who3[ ,'country'])
+show(countries)
+num_country <- nrow(countries)
+num_total <- nrow(u_country)
+num_country
+num_total
+```
+if you look at u_country you can see that there is no mismatched combination of columns, the first few letters of each country matches iso2 and iso3. Then I go on to show that there are the same amount of distinct combinations of country, iso2, and iso3 as there are countries.
+
+```{r, echo=FALSE}
+who3 %>% 
+  count(new)
+
+who4 <- who3 %>% 
+  select(-new, -iso2, -iso3)
+
+who5 <- who4 %>% 
+  separate(sexage, c("sex", "age"), sep = 1)
+who5
+```
+
+##Question 4: For each country, year, and sex compute the total number of cases of TB. Make an informative visualisation of the data.
+
+```{r, echo=TRUE}
+who5 %>%
+  group_by(country, year, sex) %>%
+  filter(year > 1995) %>%
+  count(wt = cases) %>%
+  ggplot(aes(year, n)) +
+  geom_line(aes(group = country, color = sex))
+
+```
+
+#R for Data Science 10.5
+##Question 5: What does tibble::enframe() do? When might you use it?
+
+tibble::enframe() converts named atomic vectors or lists to two-column data frames. Atomic vectors are linear vectors of a single primitive type. Essentially you take a single list of values and turn them into a 2-column table with a name and a value column. The input values are x, name, and value. X is the atomic vector, name is the names of the colums that stores the values.
+
+You can use this if you want to graph an atomic vector with labels being the names. If you do not specify names for the values then the natrual sequence is used.
+###Examples
+```{r, echo=TRUE}
+
+enframe(c(a = 6, b = 2))
+enframe(1:10)
+
+```
+
+##From Tidy Data Article
+###From table 4 to 6
+```{r, echo= FALSE}
+
+
+xtable <- function(x, file = "", ..., rownames = FALSE){
+  table <- xtable::xtable(x, ...)
+  print(table, floating = F, hline.after = NULL, 
+    add.to.row = list(pos = list(-1,0, nrow(x)), 
+    command = c('\\toprule\n ','\\midrule\n  ','\\bottomrule\n')),
+    include.rownames = rownames, NA.string = "---",
+    file = file, 
+    comment = FALSE, timestamp = FALSE
+  )
+}
+
+# Data from http://pewforum.org/Datasets/Dataset-Download.aspx
+
+# Load data -----------------------------------------------------------------
+
+pew <- read.spss("pew.sav")
+pew <- as.data.frame(pew)
+
+
+religion <- pew[c("q16", "reltrad", "income")]
+religion$reltrad <- as.character(religion$reltrad)
+religion$reltrad <- str_replace(religion$reltrad, " Churches", "")
+religion$reltrad <- str_replace(religion$reltrad, " Protestant", " Prot")
+religion$reltrad[religion$q16 == " Atheist (do not believe in God) "] <- "Atheist"
+religion$reltrad[religion$q16 == " Agnostic (not sure if there is a God) "] <- "Agnostic"
+religion$reltrad <- str_trim(religion$reltrad)
+religion$reltrad <- str_replace_all(religion$reltrad, " \\(.*?\\)", "")
+
+religion$income <- c("Less than $10,000" = "<$10k", 
+  "10 to under $20,000" = "$10-20k", 
+  "20 to under $30,000" = "$20-30k", 
+  "30 to under $40,000" = "$30-40k", 
+  "40 to under $50,000" = "$40-50k", 
+  "50 to under $75,000" = "$50-75k",
+  "75 to under $100,000" = "$75-100k", 
+  "100 to under $150,000" = "$100-150k", 
+  "$150,000 or more" = ">150k", 
+  "Don't know/Refused (VOL)" = "Don't know/refused")[religion$income]
+
+religion$income <- factor(religion$income, levels = c("<$10k", "$10-20k", "$20-30k", "$30-40k", "$40-50k", "$50-75k", 
+  "$75-100k", "$100-150k", ">150k", "Don't know/refused"))
+
+
+counts <- dplyr::count(religion, "reltrad", "income")
+names(counts)[1] <- "religion"
+
+r1 <- religion %>% dplyr::group_by(reltrad, q16, income) %>% count(income)
+r2 <- r1[c('reltrad', 'income', 'n')]
+r3 <- r2 %>% dplyr::rename(freq = n)
+
+r3
+
+```
+###From table 7 to 8
+```{r, echo= FALSE}
+billboard <- read.csv("billboard.csv")
+
+billboard
+
+b1 <- billboard %>% gather(key = 'week', value = 'rank',  -time, -genre, -date.entered, -date.peaked, -year, -artist.inverted, -track)
+b2 <- b1 %>% select(year, artist=artist.inverted, time, track, date = date.entered, week, rank )
+b3 <- b2 %>% filter(!is.na(rank))
+b4 <- b3 %>% arrange(track)
+b5 <- b4 %>% separate(week, into=c('x', 'y', 'z'), convert = TRUE, sep=c(1, -7))
+b6 <- b5 %>% dplyr::rename(week = y)
+b7 <- b6 %>% select(-x, -z)
+b8 <- b7 %>% arrange(artist, track)
+
+b8
+```
